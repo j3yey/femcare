@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 
@@ -27,27 +27,48 @@ const Login = () => {
       );
 
       // Get user data from Firestore
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      const userDocRef = doc(db, 'users', userCredential.user.uid);
+      const userDoc = await getDoc(userDocRef);
 
       if (!userDoc.exists()) {
-        // If user doesn't exist in Firestore, create a basic profile
+        // Create user document if it doesn't exist
         console.log('Creating new user profile...');
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
+        await setDoc(userDocRef, {
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+          userType: 'patient', // Default to patient
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        // Also create a patient document
+        const patientDocRef = doc(db, 'patients', userCredential.user.uid);
+        await setDoc(patientDocRef, {
           uid: userCredential.user.uid,
           email: userCredential.user.email,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          userType: 'patient' // Default to patient, can be updated later
+          medicalHistory: [],
+          appointments: [],
+          personalInfo: {
+            name: userCredential.user.displayName || '',
+            dateOfBirth: '',
+            phoneNumber: ''
+          }
+        
         });
-      }
+        console.log('Created patient document:', userCredential.user.uid);
 
-      const userData = userDoc.data();
-
-      // Redirect based on user type
-      if (userData?.userType === 'doctor') {
-        navigate('/doctor-dashboard');
-      } else {
+        // Redirect to dashboard after creating profile
         navigate('/patient-dashboard');
+      } else {
+        // User exists, get their data and redirect accordingly
+        const userData = userDoc.data();
+        if (userData?.userType === 'doctor') {
+          navigate('/doctor-dashboard');
+        } else {
+          navigate('/patient-dashboard');
+        }
       }
 
     } catch (error) {
@@ -77,7 +98,7 @@ const Login = () => {
       setLoading(false);
     }
   };
-
+  
   return (
     <div className="login-container">
       <h2>Login to FemCare+</h2>

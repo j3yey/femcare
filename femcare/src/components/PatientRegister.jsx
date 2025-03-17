@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { UserType } from "../types";
 import { useNavigate } from 'react-router-dom';
@@ -81,22 +81,40 @@ const PatientRegister = () => {
         formData.password
       );
 
-      // Add user data to Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        uid: userCredential.user.uid,
+      const timestamp = serverTimestamp();
+      const userId = userCredential.user.uid;
+
+      // Create base user data
+      const userData = {
+        uid: userId,
         email: formData.email,
-        fullName: formData.fullName,
-        dateOfBirth: formData.dateOfBirth,
-        phoneNumber: formData.phoneNumber || '',
         userType: UserType.PATIENT,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
+        fullName: formData.fullName,
+        phoneNumber: formData.phoneNumber || '',
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+
+      // Create patient-specific data
+      const patientData = {
+        ...userData,
+        dateOfBirth: formData.dateOfBirth,
+        medicalHistory: '',
+        appointments: []
+      };
+
+      // Add user data to Firestore
+      await setDoc(doc(db, 'users', userId), userData);
+      console.log('Created user document');
+
+      // Add patient data to Firestore
+      await setDoc(doc(db, 'patients', userId), patientData);
+      console.log('Created patient document');
 
       // Show success message
-      alert('Registration successful!');
+      alert('Registration successful! Please log in to continue.');
       
-      // Redirect to login page or dashboard
+      // Redirect to login page
       navigate('/login');
       
     } catch (error) {
@@ -169,6 +187,18 @@ const PatientRegister = () => {
         <button type="submit" disabled={loading}>
           {loading ? 'Registering...' : 'Register'}
         </button>
+        <div className="form-footer">
+          <p>
+            Already have an account?{' '}
+            <button 
+              type="button" 
+              className="link-button"
+              onClick={() => navigate('/login')}
+            >
+              Log in
+            </button>
+          </p>
+        </div>
       </form>
     </div>
   );
